@@ -46,3 +46,6 @@ app.*.map.json
 
 # Downloaded build outputs
 /dist/
+
+# Promo video and its local-only sources
+/promo/
