@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/connect_info.dart';
 import 'project_store.dart';
+import 'web_pages.dart' as web;
 
 /// LAN HTTP API the phone app talks to. Every request carries the PIN in the
 /// `x-pin` header.
@@ -17,6 +18,12 @@ import 'project_store.dart';
 ///   POST /api/projects/{id}/scan    `{"raw": "<QR text>"}`
 ///   POST /api/projects/{id}/check   `{"key": "C25804", "checked": true}`
 ///   POST /api/projects/{id}/clear
+///
+/// Plus read-only pages for a phone browser (PIN in the query), which is what
+/// the desktop's QR code opens in the iPhone Camera:
+///
+///   GET  /connect?pin=...&hosts=...
+///   GET  /connect/p/{id}?pin=...
 class BomServer {
   BomServer(this.store, {required this.pin});
 
@@ -50,6 +57,8 @@ class BomServer {
 
   Future<void> _handle(HttpRequest req) async {
     try {
+      final first = req.uri.pathSegments.firstOrNull;
+      if (first == 'connect' && req.method == 'GET') return _page(req);
       if (req.headers.value('x-pin') != pin) {
         return _json(req, 401, {'error': 'PIN 錯誤'});
       }
@@ -116,6 +125,48 @@ class BomServer {
         // The response was already started.
       }
     }
+  }
+
+  Future<void> _page(HttpRequest req) async {
+    final q = req.uri.queryParameters;
+    if (q['pin'] != pin) {
+      return _html(req, 401, web.errorPage('PIN 錯誤，請重新掃電腦上的 QR code'));
+    }
+    final seg = req.uri.pathSegments;
+    if (seg.length == 1) {
+      final hosts = (q['hosts'] ?? '').split(',').where((h) => h.isNotEmpty);
+      final info = ConnectInfo(
+        hosts: [
+          req.requestedUri.host,
+          ...hosts.where((h) => h != req.requestedUri.host),
+        ],
+        port: port!,
+        pin: pin,
+      );
+      return _html(
+        req,
+        200,
+        web.connectPage(
+          info: info,
+          hostName: Platform.localHostname,
+          projects: store.projects,
+        ),
+      );
+    }
+    final project = seg.length == 3 && seg[1] == 'p'
+        ? store.byId(seg[2])
+        : null;
+    if (project == null) return _html(req, 404, web.errorPage('找不到專案'));
+    return _html(req, 200, web.projectPage(project, pin: pin));
+  }
+
+  static Future<void> _html(HttpRequest req, int status, String body) async {
+    req.response
+      ..statusCode = status
+      ..headers.contentType = ContentType.html
+      ..headers.set('cache-control', 'no-store')
+      ..write(body);
+    await req.response.close();
   }
 
   static Future<Map<String, dynamic>> _body(HttpRequest req) async {

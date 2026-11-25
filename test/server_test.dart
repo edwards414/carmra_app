@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:carmra_app/client/api_client.dart';
@@ -108,5 +109,59 @@ void main() {
     expect(back.port, 8787);
     expect(back.pin, '123456');
     expect(ConnectInfo.decode('{pc:C1234}'), isNull);
+    expect(info.encode(), startsWith('http://192.168.1.5:8787/connect?'));
+
+    final app = ConnectInfo.decode(info.appLink())!;
+    expect(app.hosts, info.hosts);
+    expect(app.port, 8787);
+    expect(app.pin, '123456');
+
+    // An http link without hosts= still works, from the URL's host.
+    final bare = ConnectInfo.decode('http://10.0.0.9:8788/connect?pin=42')!;
+    expect(bare.hosts, ['10.0.0.9']);
+    expect(bare.port, 8788);
+    expect(ConnectInfo.decode('http://10.0.0.9:8788/other?pin=42'), isNull);
+  });
+
+  group('browser pages', () {
+    Future<(int, String)> get(String pathAndQuery) async {
+      final http = HttpClient();
+      try {
+        final req = await http.getUrl(
+          Uri.parse('http://127.0.0.1:${server.port}$pathAndQuery'),
+        );
+        final res = await req.close();
+        return (res.statusCode, await utf8.decodeStream(res));
+      } finally {
+        http.close();
+      }
+    }
+
+    test('the QR link shows projects and links to the app', () async {
+      final (status, body) = await get(
+        '/connect?pin=${server.pin}&hosts=127.0.0.1,10.0.0.2',
+      );
+      expect(status, 200);
+      expect(body, contains('MINI-BOARD A1'));
+      expect(body, contains('0 / 5'));
+      expect(body, contains('carmra://connect?hosts=127.0.0.1%2C10.0.0.2'));
+    });
+
+    test('a project page lists the BOM with checks', () async {
+      await client.scan(projectId, 'C25804');
+      final (status, body) = await get(
+        '/connect/p/$projectId?pin=${server.pin}',
+      );
+      expect(status, 200);
+      expect(body, contains('1 / 5'));
+      expect(body, contains('R1, R2, R10'));
+      expect(body, contains('✅'));
+    });
+
+    test('a wrong PIN is refused', () async {
+      final (status, body) = await get('/connect?pin=000');
+      expect(status, 401);
+      expect(body, isNot(contains('MINI-BOARD')));
+    });
   });
 }

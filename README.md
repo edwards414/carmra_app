@@ -16,7 +16,10 @@
 1. **電腦**：`flutter run -d macos`（或執行 `build/macos/Build/Products/Release/BOM Scanner.app`）。
    按「上傳 ibom.html 建立專案」，選 KiCad InteractiveHtmlBom 產生的 `ibom.html`。
    產生 ibom 時欄位要包含 LCSC 編號，例如 `--extra-fields LCSC,MPN`。
-2. **手機**：打開 App，掃電腦左下「手機連線」畫面上的 QR code（含 IP、port、PIN）。
+2. **手機**：掃電腦左下「手機連線」畫面上的 QR code（`http://<電腦IP>:8787/connect?pin=…`）。
+   - 用 **iPhone 相機**掃：Safari 開啟電腦提供的網頁，可確認手機連得到電腦、看 BOM 和打勾進度，
+     按「在 BOM 掃描 App 中開啟」就會開 App 並自動配對（App 要先從 TestFlight 安裝）。
+   - 用 **App 的「連線到電腦」**掃：直接配對。
    之後會記住這台電腦，開 App 就自動連線。
 3. 選專案 → 對著零件袋標籤的 QR code：
    - 🟢 **在 BOM 內，已打勾**：顯示位號（R102, R204…）、需要數量、本包數量

@@ -286,8 +286,9 @@ class _ConnectPanel extends StatelessWidget {
             Text('用手機掃描連線', style: theme.textTheme.headlineMedium),
             const SizedBox(height: 8),
             Text(
-              '手機和這台電腦要在同一個 Wi-Fi。用 iPhone 相機或 BOM 掃描 App 掃這個 QR code\n'
-              '（手機要先從 TestFlight 安裝 BOM 掃描 App）。',
+              '手機和這台電腦要在同一個 Wi-Fi。\n'
+              '用 iPhone 相機掃：開啟網頁，可確認連線、看 BOM 和打勾進度，再按按鈕開啟 App。\n'
+              '用 BOM 掃描 App 的「連線到電腦」掃：直接配對。',
               textAlign: TextAlign.center,
               style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
             ),
