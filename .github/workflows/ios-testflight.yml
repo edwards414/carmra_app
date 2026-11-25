@@ -4,7 +4,7 @@
 # (Actions -> iOS TestFlight -> Run workflow). The build number is the
 # workflow run number, so it always increases.
 #
-# Same setup as mower_lawer_app: the archive is built unsigned and the export
+# The archive is built unsigned and the export
 # signs it with App Store Connect API-key automatic signing
 # (`xcodebuild -allowProvisioningUpdates`), so Xcode manages the profile and,
 # without an imported .p12, uses a cloud-managed Apple Distribution

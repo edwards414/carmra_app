@@ -191,7 +191,7 @@ void main() {
   });
 
   // Runs against a real ibom.html when IBOM_PATH is set, e.g.
-  // IBOM_PATH=../automation_robot/hardware/AGR-TR-S3-RLY/bom/ibom.html
+  // IBOM_PATH=path/to/ibom.html
   final realPath = Platform.environment['IBOM_PATH'];
   test('parses a real ibom.html', () {
     final bom = parseIbomHtml(File(realPath!).readAsStringSync());

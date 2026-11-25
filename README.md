@@ -1,6 +1,13 @@
 # BOM 掃描（carmra_app）
 
-用手機相機掃 LCSC 零件袋上的 QR code，判斷零件是不是在這塊 PCB 的 BOM 裡，是的話自動打勾。
+用手機相機掃 LCSC 零件袋上的 QR code，判斷零件是不是在這塊 PCB 的 BOM 裡，是的話自動打勾；
+電腦端同時在 PCB 圖上標出這顆料要放在哪裡。
+
+- **地端工具，資料不上雲**：電腦當主機，手機和電腦在同一個 Wi-Fi 直接連線（PIN 驗證），不需要帳號或雲端服務。
+- **直接吃 KiCad 的 [InteractiveHtmlBom](https://github.com/openscopeproject/InteractiveHtmlBom)**：上傳 `ibom.html` 就建立專案，BOM 依 LCSC 編號合併。
+- **iPhone 掃描、macOS / Windows 當主機**，同一份 Flutter 程式碼。
+
+下載：Windows 版在 [Releases](../../releases)（`BOMScanner-windows-*.zip`）；macOS / iOS 請從原始碼編譯（見下方「開發」）。
 
 ```
 電腦（macOS App）                          手機（iOS App）
@@ -67,8 +74,8 @@ PIN 第一次啟動時產生，存在同目錄的 `host.json`。
 flutter pub get
 flutter analyze
 flutter test
-# 用真的 ibom.html 測解析
-IBOM_PATH=../automation_robot/hardware/AGR-TR-S3-RLY/bom/ibom.html flutter test test/core_test.dart
+# 用你自己的 ibom.html 測解析
+IBOM_PATH=path/to/ibom.html flutter test test/core_test.dart
 ```
 
 macOS 第一次啟動時防火牆可能會問「允許接受連線」，要按允許，手機才連得到。
@@ -99,9 +106,12 @@ flutter analyze / test ──► xcodebuild archive（不簽章）──► expo
 
 ### 一次性設定
 
+Fork 的話先把 `.github/workflows/ios-testflight.yml` 的 `TEAM_ID`、`BUNDLE_ID`、`ios/ExportOptions.plist` 的 `teamID`
+和 Xcode 專案的 Bundle ID 換成你自己的。
+
 1. App Store Connect → Apps → ＋ 新 App：Bundle ID `com.edwards.bomscanner`（沒有的話先在
    developer.apple.com → Identifiers 註冊）。App 記錄要先存在，TestFlight 才收得到 build。
-2. Repo Settings → Secrets and variables → Actions（和 mower_lawer_app 用同一把 API key）：
+2. Repo Settings → Secrets and variables → Actions：
 
    | Secret | 值 |
    |---|---|
@@ -115,3 +125,7 @@ flutter analyze / test ──► xcodebuild archive（不簽章）──► expo
    gh secret set APP_STORE_CONNECT_ISSUER_ID --body <issuer-id>
    gh secret set APP_STORE_CONNECT_PRIVATE_KEY < ~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8
    ```
+
+## 授權
+
+[MIT](LICENSE)
