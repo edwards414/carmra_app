@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../core/board.dart';
 import '../core/connect_info.dart';
 import '../core/ibom_parser.dart';
 import '../core/models.dart';
+import '../ui/board_view.dart';
 import '../ui/bom_widgets.dart';
 import 'bom_server.dart';
 import 'project_store.dart';
@@ -332,12 +334,71 @@ class _ProjectPanel extends StatefulWidget {
 class _ProjectPanelState extends State<_ProjectPanel> {
   BomFilter _filter = BomFilter.all;
 
+  /// Lines shown on the board: the last scan's, or the one clicked.
+  Set<String> _selected = {};
+  late Future<BoardGeometry?> _board;
+
+  ProjectStore get _store => widget.store;
+  BomProject get _p => widget.project;
+
+  @override
+  void initState() {
+    super.initState();
+    _board = _store.board(_p.id);
+    _store.lastScan.addListener(_onScan);
+  }
+
+  @override
+  void dispose() {
+    _store.lastScan.removeListener(_onScan);
+    super.dispose();
+  }
+
+  void _onScan() {
+    final e = _store.lastScan.value;
+    if (e == null || e.projectId != _p.id) return;
+    setState(() {
+      _selected = switch (e.outcome.status) {
+        ScanStatus.matched ||
+        ScanStatus.alreadyChecked ||
+        ScanStatus.mpnMatch => e.outcome.itemKeys.toSet(),
+        _ => {},
+      };
+    });
+  }
+
+  Future<void> _attachBoard() async {
+    final f = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'InteractiveHtmlBom', extensions: ['html', 'htm']),
+      ],
+    );
+    if (f == null) return;
+    try {
+      final board = await _store.attachBoard(_p.id, await f.readAsString());
+      setState(() => _board = Future.value(board));
+    } on IbomParseException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: kRed));
+    }
+  }
+
+  void _selectRef(String ref) {
+    for (final item in _p.items) {
+      if (item.refs.contains(ref)) {
+        setState(() => _selected = {item.key});
+        return;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final p = widget.project;
-    final store = widget.store;
+    final p = _p;
+    final store = _store;
     final theme = Theme.of(context);
-    final items = p.items.where(_filter.accepts).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -393,8 +454,45 @@ class _ProjectPanelState extends State<_ProjectPanel> {
             );
           },
         ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final list = _list();
+              final board = _boardPanel();
+              if (constraints.maxWidth >= 1000) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(width: 440, child: list),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: board),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(height: constraints.maxHeight * 0.5, child: board),
+                  const Divider(height: 1),
+                  Expanded(child: list),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _list() {
+    final p = _p;
+    final items = p.items.where(_filter.accepts).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
           child: Align(
             alignment: Alignment.centerLeft,
             child: BomFilterBar(
@@ -406,26 +504,73 @@ class _ProjectPanelState extends State<_ProjectPanel> {
         ),
         Expanded(
           child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
             itemCount: items.length,
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final item = items[i];
-              final last = store.lastScan.value;
               return BomItemTile(
                 item: item,
-                highlight:
-                    last != null &&
-                    last.projectId == p.id &&
-                    DateTime.now().difference(last.at).inSeconds < 5 &&
-                    last.outcome.itemKeys.contains(item.key) &&
-                    last.outcome.status == ScanStatus.matched,
-                onTap: () => store.setChecked(p.id, item.key, !item.checked),
+                selected: _selected.contains(item.key),
+                onTap: () => setState(() => _selected = {item.key}),
+                onToggle: () =>
+                    _store.setChecked(p.id, item.key, !item.checked),
               );
             },
           ),
         ),
       ],
+    );
+  }
+
+  Widget _boardPanel() {
+    final p = _p;
+    return FutureBuilder<BoardGeometry?>(
+      future: _board,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final board = snap.data;
+        if (board == null) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.developer_board, size: 48),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '這個專案還沒有板子圖。\n載入同一個 ibom.html 就能看到掃到的零件在板子上的位置（打勾紀錄會保留）。',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: _attachBoard,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('載入 ibom.html'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        final highlight = {
+          for (final item in p.items)
+            if (_selected.contains(item.key)) ...item.refs,
+        };
+        final checked = {
+          for (final item in p.items)
+            if (item.checked) ...item.refs,
+        };
+        return BoardView(
+          board: board,
+          highlight: highlight,
+          checked: checked,
+          onTapRef: _selectRef,
+        );
+      },
     );
   }
 }

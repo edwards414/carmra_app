@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/board.dart';
 import '../core/ibom_parser.dart';
 import '../core/matcher.dart';
 import '../core/models.dart';
@@ -33,7 +34,11 @@ class ProjectStore extends ChangeNotifier {
   Future<void> load() async {
     await dir.create(recursive: true);
     await for (final f in dir.list()) {
-      if (f is! File || !f.path.endsWith('.json')) continue;
+      if (f is! File ||
+          !f.path.endsWith('.json') ||
+          f.path.endsWith('.board.json')) {
+        continue;
+      }
       try {
         final p = BomProject.fromJson(
           jsonDecode(await f.readAsString()) as Map<String, dynamic>,
@@ -75,14 +80,69 @@ class ProjectStore extends ChangeNotifier {
     );
     _projects[project.id] = project;
     await _save(project);
+    if (bom.board != null) await _saveBoard(project.id, bom.board!);
     notifyListeners();
     return project;
   }
 
+  final Map<String, BoardGeometry?> _boards = {};
+
+  /// The project's board for the location view, or null when its ibom.html
+  /// was imported without one (see [attachBoard]).
+  Future<BoardGeometry?> board(String id) async {
+    if (_boards.containsKey(id)) return _boards[id];
+    BoardGeometry? board;
+    final f = _boardFile(id);
+    if (await f.exists()) {
+      try {
+        board = BoardGeometry.fromJson(
+          jsonDecode(await f.readAsString()) as Map<String, dynamic>,
+        );
+      } on Object catch (e) {
+        debugPrint('bad board file ${f.path}: $e');
+      }
+    }
+    return _boards[id] = board;
+  }
+
+  /// Adds the board from [html] to an existing project, keeping its checks.
+  /// Throws [IbomParseException] when the page has no board or its parts do
+  /// not belong to the project.
+  Future<BoardGeometry> attachBoard(String id, String html) async {
+    final p = _projects[id];
+    if (p == null) throw ArgumentError('no project $id');
+    final board = parseIbomHtml(html).board;
+    if (board == null) {
+      throw IbomParseException('這個 ibom.html 沒有板子圖資料。');
+    }
+    final refs = {for (final f in board.footprints) f.ref};
+    final bomRefs = [for (final i in p.items) ...i.refs];
+    final known = bomRefs.where(refs.contains).length;
+    if (bomRefs.isNotEmpty && known < bomRefs.length / 2) {
+      throw IbomParseException(
+        '這個 ibom.html 的零件和專案「${p.name}」對不起來（$known / ${bomRefs.length} 個位號相符）。',
+      );
+    }
+    await _saveBoard(id, board);
+    notifyListeners();
+    return board;
+  }
+
+  Future<void> _saveBoard(String id, BoardGeometry board) async {
+    _boards[id] = board;
+    final tmp = File('${dir.path}/$id.board.json.tmp');
+    await tmp.writeAsString(jsonEncode(board.toJson()), flush: true);
+    await tmp.rename(_boardFile(id).path);
+  }
+
+  File _boardFile(String id) => File('${dir.path}/$id.board.json');
+
   Future<void> delete(String id) async {
     _projects.remove(id);
-    final f = _file(id);
-    if (await f.exists()) await f.delete();
+    _boards.remove(id);
+    for (final f in [_file(id), _boardFile(id)]) {
+      if (await f.exists()) await f.delete();
+    }
     notifyListeners();
   }
 

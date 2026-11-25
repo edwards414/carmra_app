@@ -90,31 +90,49 @@ class BomItemTile extends StatelessWidget {
     super.key,
     required this.item,
     required this.onTap,
+    this.onToggle,
     this.highlight = false,
+    this.selected = false,
   });
 
   final BomItem item;
   final VoidCallback? onTap;
+
+  /// When set, the check icon toggles the line and [onTap] does something
+  /// else (the desktop selects the line to show it on the board).
+  final VoidCallback? onToggle;
   final bool highlight;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
+    final checkIcon = Icon(
+      item.checked ? Icons.check_circle : Icons.radio_button_unchecked,
+      color: item.checked ? kGreen : muted,
+      size: 30,
+    );
     final details = [
       item.footprint,
       item.mpn,
     ].where((s) => s.isNotEmpty).join(' · ');
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      color: highlight ? kGreen.withValues(alpha: 0.15) : Colors.transparent,
+      color: selected
+          ? kOrange.withValues(alpha: 0.14)
+          : highlight
+          ? kGreen.withValues(alpha: 0.15)
+          : Colors.transparent,
       child: ListTile(
         onTap: onTap,
-        leading: Icon(
-          item.checked ? Icons.check_circle : Icons.radio_button_unchecked,
-          color: item.checked ? kGreen : muted,
-          size: 30,
-        ),
+        leading: onToggle == null
+            ? checkIcon
+            : IconButton(
+                tooltip: item.checked ? '取消打勾' : '打勾',
+                onPressed: onToggle,
+                icon: checkIcon,
+              ),
         title: Text.rich(
           TextSpan(
             children: [
