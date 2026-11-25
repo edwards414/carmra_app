@@ -9,10 +9,13 @@ import 'project_list_page.dart';
 
 /// Pair with the desktop by scanning its QR code or typing its address.
 class ConnectPage extends StatefulWidget {
-  const ConnectPage({super.key, this.initialError, this.saved});
+  const ConnectPage({super.key, this.initialError, this.saved, this.pending});
 
   final String? initialError;
   final ConnectInfo? saved;
+
+  /// Pairing info from a carmra:// link; connects right away.
+  final ConnectInfo? pending;
 
   @override
   State<ConnectPage> createState() => _ConnectPageState();
@@ -30,6 +33,10 @@ class _ConnectPageState extends State<ConnectPage> {
   void initState() {
     super.initState();
     _error = widget.initialError;
+    final pending = widget.pending;
+    if (pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _connect(pending));
+    }
   }
 
   @override
