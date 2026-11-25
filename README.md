@@ -13,7 +13,8 @@
 
 ## 使用方式
 
-1. **電腦**：`flutter run -d macos`（或執行 `build/macos/Build/Products/Release/BOM Scanner.app`）。
+1. **電腦**：macOS 用 `flutter run -d macos`（或執行 `build/macos/Build/Products/Release/BOM Scanner.app`）；
+   Windows 解壓 `BOMScanner-windows-*.zip` 執行 `BOMScanner.exe`（第一次啟動防火牆詢問時要允許「私人網路」）。
    按「上傳 ibom.html 建立專案」，選 KiCad InteractiveHtmlBom 產生的 `ibom.html`。
    產生 ibom 時欄位要包含 LCSC 編號，例如 `--extra-fields LCSC,MPN`。
 2. **手機**：掃電腦左下「手機連線」畫面上的 QR code（`http://<電腦IP>:8787/connect?pin=…`）。
@@ -68,6 +69,17 @@ IBOM_PATH=../automation_robot/hardware/AGR-TR-S3-RLY/bom/ibom.html flutter test 
 ```
 
 macOS 第一次啟動時防火牆可能會問「允許接受連線」，要按允許，手機才連得到。
+
+## Windows 版
+
+Flutter 不能在 macOS 上編 Windows，由 GitHub Actions 的 Windows runner 編：
+`.github/workflows/windows.yml`，推 `v*` tag 或手動觸發（Actions → Windows → Run workflow），
+產出 `BOMScanner-windows-<版本>.zip`（exe + DLL + data，已附 VC++ runtime），tag 時也會附在 GitHub Release。
+
+```bash
+gh workflow run windows.yml && gh run watch
+gh run download --name BOMScanner-windows-1.0.0 --dir dist
+```
 
 ## 發佈到 TestFlight
 

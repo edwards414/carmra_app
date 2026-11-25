@@ -184,28 +184,86 @@ class BomServer {
     await req.response.close();
   }
 
-  /// IPv4 addresses a phone on the same network can reach, Wi-Fi/Ethernet
-  /// first.
+  /// IPv4 addresses a phone on the same network can reach, most likely
+  /// first (the QR code's link uses the first one).
   static Future<List<String>> lanAddresses() async {
     final interfaces = await NetworkInterface.list(
       type: InternetAddressType.IPv4,
       includeLoopback: false,
     );
-    int rank(NetworkInterface i) {
-      final n = i.name;
-      if (n == 'en0' || n.startsWith('wl') || n.startsWith('eth')) return 0;
-      if (n.startsWith('en')) return 1;
-      if (n.startsWith('bridge') || n.startsWith('utun')) return 3;
-      return 2;
-    }
-
-    interfaces.sort((a, b) => rank(a).compareTo(rank(b)));
-    return [
+    return rankAddresses([
       for (final i in interfaces)
         for (final a in i.addresses)
-          if (!a.isLinkLocal) a.address,
-    ];
+          if (!a.isLinkLocal) (i.name, a.address),
+    ]);
   }
+}
+
+/// Orders (interface name, IPv4) pairs: Wi-Fi / Ethernet before virtual
+/// adapters (WSL, Hyper-V, Docker, VPNs), home/office ranges before others.
+List<String> rankAddresses(List<(String, String)> candidates) {
+  int score((String, String) c) {
+    final name = c.$1.toLowerCase();
+    final addr = c.$2;
+    const virtual = [
+      'vethernet',
+      'virtualbox',
+      'vboxnet',
+      'vmware',
+      'vmnet',
+      'hyper-v',
+      'docker',
+      'bridge',
+      'utun',
+      'tailscale',
+      'zerotier',
+      'wsl',
+      'awdl',
+      'llw',
+      'anpi',
+      'loopback',
+    ];
+    int nameScore;
+    if (virtual.any(name.contains)) {
+      nameScore = 100;
+    } else if (name == 'en0' ||
+        name.startsWith('wl') ||
+        name.contains('wi-fi') ||
+        name.contains('wifi') ||
+        name.contains('wireless')) {
+      nameScore = 0;
+    } else if (name.startsWith('en') ||
+        name.startsWith('eth') ||
+        name.contains('ethernet') ||
+        name.contains('乙太網路')) {
+      nameScore = 10;
+    } else {
+      nameScore = 50;
+    }
+    final parts = addr.split('.').map(int.tryParse).toList();
+    final int addrScore;
+    if (parts.length == 4 && parts[0] == 192 && parts[1] == 168) {
+      addrScore = 0;
+    } else if (parts.isNotEmpty && parts[0] == 10) {
+      addrScore = 1;
+    } else if (parts.length == 4 &&
+        parts[0] == 172 &&
+        parts[1] != null &&
+        parts[1]! >= 16 &&
+        parts[1]! <= 31) {
+      addrScore = 3;
+    } else {
+      addrScore = 2;
+    }
+    return nameScore + addrScore;
+  }
+
+  final sorted = [...candidates]..sort((a, b) => score(a).compareTo(score(b)));
+  final seen = <String>{};
+  return [
+    for (final c in sorted)
+      if (seen.add(c.$2)) c.$2,
+  ];
 }
 
 /// Returns the saved 6-digit PIN, creating one on first run.

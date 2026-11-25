@@ -123,6 +123,26 @@ void main() {
     expect(ConnectInfo.decode('http://10.0.0.9:8788/other?pin=42'), isNull);
   });
 
+  test('LAN addresses: real adapters first, virtual ones last', () {
+    expect(
+      rankAddresses([
+        ('vEthernet (WSL)', '172.20.16.1'),
+        ('Ethernet 2', '10.0.0.5'),
+        ('Wi-Fi', '192.168.0.109'),
+        ('Tailscale', '100.64.0.2'),
+      ]),
+      ['192.168.0.109', '10.0.0.5', '100.64.0.2', '172.20.16.1'],
+    );
+    expect(
+      rankAddresses([
+        ('bridge100', '192.168.64.1'),
+        ('utun3', '10.8.0.2'),
+        ('en0', '192.168.0.109'),
+      ]).first,
+      '192.168.0.109',
+    );
+  });
+
   group('browser pages', () {
     Future<(int, String)> get(String pathAndQuery) async {
       final http = HttpClient();
